@@ -12,8 +12,10 @@ logger = logging.getLogger(__name__)
 
 class SquashMe:
 
+    USER_ID = ''
+
     def __init__(self, court_number=None, discipline='squash', start="6:00", end="23:30",
-                 day=datetime.today().strftime('%Y-%m-%d')):
+                 day=datetime.today().strftime('%Y-%m-%d'), **kwargs):
         self.session = None
         self.court_number = court_number
         self.discipline = discipline
@@ -23,7 +25,7 @@ class SquashMe:
         self.parser = self.create_parser()
 
     def create_parser(self):
-        payload = dict(log=os.environ['SQ_USER'], pwd=os.environ['SQ_PASSWORD'])
+        payload = dict(log=os.environ['SQ_USER'], pwd=os.environ['SQ_USER'])
 
         self.session = Session()
         self.session.post(login_page, data=payload)
@@ -96,7 +98,7 @@ class SquashMe:
             payload.update({'REZ[]': slot})
             self.session.post(admin_page, payload)
 
-        self.session.post(admin_page, dict(action='Rezerwacje4Datepicker', klie_nick='damecp'))
+        self.session.post(admin_page, dict(action='Rezerwacje4Datepicker', klie_nick=self.USER_ID))
 
     def get_user_reservations(self, reservations):
         reservations = reservations.strip().split(' ')
@@ -114,7 +116,7 @@ class SquashMe:
 
     def _create_reservation_payload(self, user_reservations):
         for reservation in list(self.get_free_reservations()):
-            if reservation['free_since'] in user_reservations:
+            if reservation['free_since'] in user_reservations and reservation['court'] == self.court_number:
                 yield '{}_{}_{}'.format(reservation['id'], reservation['free_since'], reservation['free_until'])
 
     def show_free_reservations(self):

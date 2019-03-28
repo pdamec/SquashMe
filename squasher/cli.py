@@ -1,8 +1,7 @@
 import argparse
 import logging
-from pprint import pprint
 from datetime import datetime
-from .squasher import SquashMe
+from .wrapper import SQWrapper
 
 
 def create_parser():
@@ -14,6 +13,7 @@ def create_parser():
     parser.add_argument('--start', type=str, default="6:00")
     parser.add_argument('--end', type=str, default="23:30")
     parser.add_argument('--day', type=str, default=today)
+    parser.add_argument('--rename', type=bool, nargs='?', const=True)
     return parser.parse_args()
 
 
@@ -23,15 +23,6 @@ def main():
 
     args = create_parser()
 
-    sq = SquashMe(args.court_number, args.discipline, args.start, args.end, args.day)
-    free_reservations = sq.show_free_reservations()
-
-    if free_reservations:
-        pprint(free_reservations)
-        user_reservations = input('Select hours to reserve (hh:mm-hh:mm or hh:mm): ')
-        if user_reservations:
-            sq.book_courts(reservations=user_reservations)
-        else:
-            logging.info('No user reservations provided.')
-    else:
-        logging.info('No courts available between {}-{} on {}.'.format(args.start, args.end, args.day))
+    wrapper = SQWrapper(court_number=args.court_number, discipline=args.discipline, start=args.start, end=args.end,
+                        day=args.day, is_rename=args.rename)
+    wrapper.start_me_please()
