@@ -117,3 +117,6 @@ dmypy.json
 
 # Pycharm stuff
 .idea/
+
+# Vscode stuff
+.vscode/

@@ -1,7 +1,8 @@
 import os
 import logging
+from getpass import getpass
 from configparser import ConfigParser
-from pprint import pprint
+from pprint import pformat
 from .squasher import SquashMe
 
 logger = logging.getLogger(__name__)
@@ -13,54 +14,63 @@ class SQWrapper:
 
     def __init__(self, **kwargs):
         self.args = kwargs
-        self.sq = SquashMe(**kwargs)
+        self.set_config()
+        self.sq = SquashMe(**kwargs, config=self.get_config())
 
     def start_me_please(self):
-        self.set_config()
         free_reservations = self.sq.show_free_reservations()
 
         if free_reservations:
-            pprint(free_reservations)
+            logger.info(pformat(free_reservations))
             user_reservations = input('Select hours to reserve (hh:mm-hh:mm or hh:mm): ')
-            self.check_court()
-            self.check_user_reservations(user_reservations)
+
+            if self.args['court_number'] is None:
+                self.set_court()
+            self.reserve(user_reservations)
         else:
             logger.info('No courts available between {}-{} on {}.'.format(self.args['start'], self.args['end'],
                                                                           self.args['day']))
 
-    def check_court(self):
-        if self.args['court_number'] is None:
-            court = input('Select court (number): ')
-            self.sq.court_number = court
-        logger.info('Checking reservations for court: {}'.format(self.sq.court_number))
+    def set_court(self):
+        court = input('Select court (number): ')
+        if court:
+            self.sq.court_number = int(court)
+            logger.info('Getting reservations for court: {}'.format(self.sq.court_number))
+        else:
+            logger.info('No court provided.')
 
-    def check_user_reservations(self, user_reservations):
+    def reserve(self, user_reservations):
         if user_reservations:
-            self.sq.book_courts(reservations=user_reservations)
+            user_reservations = list(self.sq.get_user_reservations(user_reservations))
+            print(user_reservations)
+            reservation_slots = self.sq.create_reservation_payload(user_reservations)
+            self.sq.request_reservations(reservation_slots)
         else:
             logger.info('No user reservations provided.')
 
     def set_config(self):
         if not os.path.isfile(SQWrapper.CONFIG_PATH) or self.args['is_rename']:
-            user_name = input('Provide name and surname (Name Surname) '
-                              'that were used to create Hasta La Vista account: ')
-            self.create_config(user_name)
-        self.sq.USER_ID = self.get_user_id()
+            login = input('Provide login to Hasta La Vista: ')
+            password = getpass()
+            username = input('Provide name and surname (Name Surname) '
+                             'that were used to create Hasta La Vista account: ')
+            self.create_config(login, password, username)
 
     @staticmethod
-    def create_config(user_name):
-        user_name = user_name.lower().strip().split(' ')
+    def create_config(login, password, username):
+        username = username.lower().strip().split(' ')
 
         config = ConfigParser()
-        config['USER_INFO'] = dict(name=user_name[0], surname=user_name[1])
+        config['USER_INFO'] = dict(login=login, password=password, name=username[0], surname=username[1])
         with open(SQWrapper.CONFIG_PATH, 'w') as configfile:
             config.write(configfile)
 
     @staticmethod
-    def get_user_id():
+    def get_config():
         config = ConfigParser()
         config.read(SQWrapper.CONFIG_PATH)
+
         name = config['USER_INFO']['NAME']
         surname = config['USER_INFO']['SURNAME']
-        return '{}{}'.format(surname, name[0]).lower()
-
+        user_id = '{}{}'.format(surname, name[0]).lower()
+        return dict(login=config['USER_INFO']['LOGIN'], password=config['USER_INFO']['PASSWORD'], user_id=user_id)

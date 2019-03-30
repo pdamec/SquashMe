@@ -1,5 +1,4 @@
 import re
-import os
 from datetime import datetime, date, timedelta
 import logging
 from requests import Session
@@ -12,10 +11,12 @@ logger = logging.getLogger(__name__)
 
 class SquashMe:
 
-    USER_ID = ''
-
     def __init__(self, court_number=None, discipline='squash', start="6:00", end="23:30",
                  day=datetime.today().strftime('%Y-%m-%d'), **kwargs):
+
+        if 'config' in kwargs:
+            self.config = kwargs['config']
+
         self.session = None
         self.court_number = court_number
         self.discipline = discipline
@@ -24,19 +25,22 @@ class SquashMe:
         self.day = day
         self.parser = self.create_parser()
 
+    @property
+    def free_reservations(self):
+        return self.get_free_reservations()
+
     def create_parser(self):
-        payload = dict(log=os.environ['SQ_USER'], pwd=os.environ['SQ_USER'])
+        payload = dict(log=self.config['login'], pwd=self.config['password'])
 
         self.session = Session()
         self.session.post(login_page, data=payload)
-        content = self._load_reservation_table()
+        content = self.load_reservation_table()
         return html.fromstring(content)
 
     def get_costs(self):
         regex = r'\d{2} - \d{2}|\d{2} \w{2}'
         table_headers = [i.strip() for i in self.parser.getchildren()[0].itertext() if re.match(regex, i)]
-        a = {hours: cost for hours, cost in zip(table_headers[0::2], table_headers[1::2])}
-        return a
+        return {hours: cost for hours, cost in zip(table_headers[0::2], table_headers[1::2])}
 
     def get_free_reservations(self):
         free_reservations = self.parser.find_class('rez rez_wolne')
@@ -57,7 +61,7 @@ class SquashMe:
             now = now.replace(day=now.day + 1)
         return datetime.strptime('{} {}'.format(now, res_time), '%Y-%m-%d %H:%M')
 
-    def _load_reservation_table(self):
+    def load_reservation_table(self):
         payload = {
             'operacja': 'ShowRezerwacjeTable',
             'action': 'ShowRezerwacjeTable',
@@ -80,25 +84,23 @@ class SquashMe:
     #     #
     #     self._is_between('11:00', ('06:00', '16:00'))
 
-    def book_courts(self, **kwargs):
-        if 'reservations' in kwargs:
-            user_reservations = list(self.get_user_reservations(kwargs['reservations']))
-            print(list(user_reservations))
-        else:
-            user_reservations = []
+    def create_reservation_payload(self, user_reservations):
+        print(self.court_number)
+        for reservation in self.free_reservations:
+            if reservation['free_since'] in user_reservations and int(reservation['court']) == self.court_number:
+                yield '{}_{}_{}'.format(reservation['id'], reservation['free_since'], reservation['free_until'])
 
-        reservation_slots = self._create_reservation_payload(user_reservations)
-        print(list(reservation_slots))
-        # self.make_reservations(reservation_slots)
-
-    def make_reservations(self, reservation_slots):
+    def request_reservations(self, reservation_slots):
         for slot in reservation_slots:
-            print(slot)
             payload = dict(action='RezerwujWybraneZapisz', data=self.day)
             payload.update({'REZ[]': slot})
             self.session.post(admin_page, payload)
 
-        self.session.post(admin_page, dict(action='Rezerwacje4Datepicker', klie_nick=self.USER_ID))
+            parsed_payload = payload['REZ[]'].split('_')
+            logger.info(f'Making reservation for {self.discipline} between {parsed_payload[1]} - {parsed_payload[2]} '
+                        f'on court {self.court_number}')
+
+        self.session.post(admin_page, dict(action='Rezerwacje4Datepicker', klie_nick=self.config['user_id']))
 
     def get_user_reservations(self, reservations):
         reservations = reservations.strip().split(' ')
@@ -107,24 +109,23 @@ class SquashMe:
                 starting = self.convert_time(reservation.split('-')[0])
                 ending = self.convert_time(reservation.split('-')[1])
                 while starting < ending:
-                    starting += timedelta(minutes=30)
                     yield starting.strftime('%H:%M')
+                    starting += timedelta(minutes=30)
             elif re.match(r'\d{2}:\d{2}', reservation):
                 yield reservation
             else:
                 logging.info('Wrong reservation time format: {}.'.format(reservation))
 
-    def _create_reservation_payload(self, user_reservations):
-        for reservation in list(self.get_free_reservations()):
-            if reservation['free_since'] in user_reservations and reservation['court'] == self.court_number:
-                yield '{}_{}_{}'.format(reservation['id'], reservation['free_since'], reservation['free_until'])
-
     def show_free_reservations(self):
         if self.court_number:
             reservations = []
-            for reservation in self.get_free_reservations():
+            for reservation in self.free_reservations:
                 if int(reservation['court']) == self.court_number:
                     reservations.append(reservation)
         else:
-            reservations = list(self.get_free_reservations())
+            reservations = list(self.free_reservations)
         return reservations
+
+    def automatic_reservation(self):
+        # TBD
+        pass
