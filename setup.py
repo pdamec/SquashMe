@@ -7,7 +7,7 @@ requirements = [req.strip() for req in open(os.path.join(os.path.dirname(__file_
 
 setup(
     name='squash-me',
-    version='0.1.0-dev',
+    version='1.0.0',
     author='Patryk Damec',
     author_email='patryk.damec@gmail.com',
     packages=['squasher'],

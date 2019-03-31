@@ -6,6 +6,32 @@ automating <i>Hasta La Vista</i> - one of the biggest sport centres in Wroclaw.
 
 With it, you can constantly fetch and reserve free courts at desired time.
 
+## Requirements
+
+- other packages
+```
+lxml==4.3.1
+requests==2.21.0
+```
+
+- config.ini file
+```
+[USER_INFO]
+# For getting page content and making reservations.
+login = dummy
+password = dummy
+
+# For creating client id that is used with reservation request.
+name = dummy
+surname = dummy
+``` 
+
+User is prompted for information on first CLI execution 
+in order to create the file at SquashMe\squasher\config.ini
+
+The config can be later altered with --rename or manually at the given location.
+
+
 ## Installation
 Either:
 - Install directly from repository
@@ -32,6 +58,7 @@ Where:
 - start: from what time look for available courts. Default set for 06:00 AM.
 - end: until what time look for available courts. Default set for 12 AM.
 - day: on what day free courts should be checked. Default is day of program execution.
+- rename: Create new config.ini
 
 IMPORTANT NOTE: start, end arguments support 24-hour format.
  
@@ -40,4 +67,5 @@ For more info, execute:
 ```
 sq-me --help
 ```
+
 
